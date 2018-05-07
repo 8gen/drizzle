@@ -1,50 +1,72 @@
-import { END, eventChannel } from 'redux-saga'
-import { call, put, take, takeEvery, takeLatest } from 'redux-saga/effects'
-const BlockTracker = require('eth-block-tracker')
+import { END, eventChannel } from "redux-saga";
+import { call, put, take, takeEvery, takeLatest } from "redux-saga/effects";
+const BlockTracker = require("eth-block-tracker");
 
 /*
  * Listen for Blocks
  */
 
-function createBlockChannel({contracts, contractAddresses, contractNames, web3}) {
+function createBlockChannel({
+  contracts,
+  contractAddresses,
+  contractNames,
+  web3
+}) {
   return eventChannel(emit => {
-    const blockEvents = web3.eth.subscribe('newBlockHeaders', (error, result) => {
-      if (error)
-      {
-        emit({type: 'BLOCKS_FAILED', error})
+    const blockEvents = web3.eth
+      .subscribe("newBlockHeaders", (error, result) => {
+        if (error) {
+          emit({ type: "BLOCKS_FAILED", error });
 
-        console.error('Error in block header subscription:')
-        console.error(error)
+          console.error("Error in block header subscription:");
+          console.error(error);
 
-        emit(END)
-      }
-    })
-    .on('data', (blockHeader) => {
-      emit({type: 'BLOCK_RECEIVED', blockHeader, contracts, contractAddresses, contractNames, web3})
-    })
-    .on('error', error => {
-      emit({type: 'BLOCKS_FAILED', error})
-      emit(END)
-    })
+          emit(END);
+        }
+      })
+      .on("data", blockHeader => {
+        emit({
+          type: "BLOCK_RECEIVED",
+          blockHeader,
+          contracts,
+          contractAddresses,
+          contractNames,
+          web3
+        });
+      })
+      .on("error", error => {
+        emit({ type: "BLOCKS_FAILED", error });
+        emit(END);
+      });
 
     const unsubscribe = () => {
-      blockEvents.off()
-    }
+      blockEvents.off();
+    };
 
-    return unsubscribe
-  })
+    return unsubscribe;
+  });
 }
 
-function* callCreateBlockChannel({contracts, contractAddresses, contractNames, web3}) {
-  const blockChannel = yield call(createBlockChannel, {contracts, contractAddresses, contractNames, web3})
+function* callCreateBlockChannel({
+  contracts,
+  contractAddresses,
+  contractNames,
+  web3
+}) {
+  const blockChannel = yield call(createBlockChannel, {
+    contracts,
+    contractAddresses,
+    contractNames,
+    web3
+  });
 
   try {
     while (true) {
-      var event = yield take(blockChannel)
-      yield put(event)
+      var event = yield take(blockChannel);
+      yield put(event);
     }
   } finally {
-    blockChannel.close()
+    blockChannel.close();
   }
 }
 
@@ -52,39 +74,65 @@ function* callCreateBlockChannel({contracts, contractAddresses, contractNames, w
  * Poll for Blocks
  */
 
-function createBlockPollChannel({contracts, contractAddresses, contractNames, interval, web3}) {
+function createBlockPollChannel({
+  contracts,
+  contractAddresses,
+  contractNames,
+  interval,
+  web3
+}) {
   return eventChannel(emit => {
-    const blockTracker = new BlockTracker({ provider: web3.currentProvider, pollingInterval: interval})
+    const blockTracker = new BlockTracker({
+      provider: web3.currentProvider,
+      pollingInterval: interval
+    });
 
-    blockTracker.on('latest', (block) => {
-      emit({type: 'BLOCK_FOUND', block, contracts, contractAddresses, contractNames, web3})
-    })
+    blockTracker.on("latest", block => {
+      emit({
+        type: "BLOCK_FOUND",
+        block,
+        contracts,
+        contractAddresses,
+        contractNames,
+        web3
+      });
+    });
 
-    blockTracker
-    .start()
-    .catch((error) => {
-      emit({type: 'BLOCKS_FAILED', error})
-      emit(END)
-    })
+    blockTracker.start().catch(error => {
+      emit({ type: "BLOCKS_FAILED", error });
+      emit(END);
+    });
 
     const unsubscribe = () => {
-      blockTracker.stop()
-    }
+      blockTracker.stop();
+    };
 
-    return unsubscribe
-  })
+    return unsubscribe;
+  });
 }
 
-function* callCreateBlockPollChannel({contracts, contractAddresses, contractNames, interval, web3}) {
-  const blockChannel = yield call(createBlockPollChannel, {contracts, contractAddresses, contractNames, interval, web3})
+function* callCreateBlockPollChannel({
+  contracts,
+  contractAddresses,
+  contractNames,
+  interval,
+  web3
+}) {
+  const blockChannel = yield call(createBlockPollChannel, {
+    contracts,
+    contractAddresses,
+    contractNames,
+    interval,
+    web3
+  });
 
   try {
     while (true) {
-      var event = yield take(blockChannel)
-      yield put(event)
+      var event = yield take(blockChannel);
+      yield put(event);
     }
   } finally {
-    blockChannel.close()
+    blockChannel.close();
   }
 }
 
@@ -92,61 +140,82 @@ function* callCreateBlockPollChannel({contracts, contractAddresses, contractName
  * Process Blocks
  */
 
-function* processBlockHeader({blockHeader, contracts, contractAddresses, contractNames, web3}) {
-  const blockNumber = blockHeader.number
+function* processBlockHeader({
+  blockHeader,
+  contracts,
+  contractAddresses,
+  contractNames,
+  web3
+}) {
+  const blockNumber = blockHeader.number;
 
   try {
-    const block = yield call(web3.eth.getBlock, blockNumber, true)
+    const block = yield call(web3.eth.getBlock, blockNumber, true);
 
-    yield call(processBlock, {block, contracts, contractAddresses, contractNames, web3})
-  }
-  catch (error) {
-    console.error('Error in block processing:')
-    console.error(error)
+    yield call(processBlock, {
+      block,
+      contracts,
+      contractAddresses,
+      contractNames,
+      web3
+    });
+  } catch (error) {
+    console.error("Error in block processing:");
+    console.error(error);
 
-    yield put({type: 'BLOCK_FAILED', error})
+    yield put({ type: "BLOCK_FAILED", error });
 
-    return
+    return;
   }
 }
 
-function* processBlock({block, contracts, contractAddresses, contractNames, web3}) {
+function* processBlock({
+  block,
+  contracts,
+  contractAddresses,
+  contractNames,
+  web3
+}) {
   try {
-    const txs = block.transactions
+    const txs = block.transactions;
 
-    if (txs.length > 0)
-    {
+    if (txs.length > 0) {
       // Loop through txs looking for contract address
-      for (var i = 0; i < txs.length; i++)
-      {
-        if (contractAddresses.indexOf(txs[i].from.toLowerCase()) !== -1 || contractAddresses.indexOf(txs[i].to.toLowerCase()) !== -1)
-        {
-          const index = contractAddresses.indexOf(txs[i].from.toLowerCase()) !== -1 ? contractAddresses.indexOf(txs[i].from.toLowerCase()) : contractAddresses.indexOf(txs[i].to.toLowerCase())
-          const contractName = contractNames[index]
-          
-          yield put({type: 'CONTRACT_SYNCING', contract: contracts[contractName]})
+      for (var i = 0; i < txs.length; i++) {
+        const tx = txs[i];
+        const [fromIndex, toIndex] = [
+          contractAddresses.indexOf(tx.from && tx.from.toLowerCase()),
+          contractAddresses.indexOf(tx.to && tx.to.toLowerCase())
+        ];
+        if (fromIndex !== -1 || toIndex !== -1) {
+          const index = fromIndex !== -1 ? fromIndex : toIndex;
+          const contractName = contractNames[index];
+
+          yield put({
+            type: "CONTRACT_SYNCING",
+            contract: contracts[contractName]
+          });
         }
       }
     }
-  }
-  catch (error) {
-    console.error('Error in block processing:')
-    console.error(error)
+  } catch (error) {
+    console.error("Error in block processing:");
+    console.error(error);
 
-    yield put({type: 'BLOCK_FAILED', error})
+    yield put({ type: "BLOCK_FAILED", error });
 
-    return
+    return;
   }
 }
 
 function* blocksSaga() {
   // Block Subscriptions
-  yield takeLatest('BLOCKS_LISTENING', callCreateBlockChannel)
-  yield takeEvery('BLOCK_RECEIVED', processBlockHeader)
+  yield takeLatest("BLOCKS_LISTENING", callCreateBlockChannel);
+  yield takeEvery("BLOCK_RECEIVED", processBlockHeader);
 
   // Block Polling
-  yield takeLatest('BLOCKS_POLLING', callCreateBlockPollChannel)  
-  yield takeEvery('BLOCK_FOUND', processBlock)
+  yield takeLatest("BLOCKS_POLLING", callCreateBlockPollChannel);
+  yield takeEvery("BLOCK_FOUND", processBlock);
 }
 
-export default blocksSaga
+export default blocksSaga;
